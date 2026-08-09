@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Capybara Jelly Dodge</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <div id="game-container">
+
+      <!-- Score / Best HUD -->
+      <div id="hud">
+        <span id="score-display">Score: 0</span>
+        <span id="best-display">Best: 0</span>
+      </div>
+
+      <!-- Main game canvas: everything (background, lanes, capybara, jelly beans) is drawn here -->
+      <canvas id="game-canvas" width="360" height="720"></canvas>
+
+      <!-- On-screen controls, overlaid near the bottom of the game area -->
+      <div id="controls">
+        <button id="btn-left" class="control-btn" aria-label="Move left">&larr; Left</button>
+        <button id="btn-right" class="control-btn" aria-label="Move right">Right &rarr;</button>
+      </div>
+
+      <!-- Start screen overlay -->
+      <div id="start-screen" class="overlay-screen">
+        <h1 class="game-title">Capybara<br>Jelly Dodge</h1>
+
+        <!-- Capybara mascot art -->
+        <img class="capybara-preview" src="assets/capybara_still.png" alt="Capybara" />
+
+        <p class="level-label">Level 1 &mdash; Easy</p>
+        <p id="loading-text" class="loading-text">Loading&hellip;</p>
+        <button id="btn-play" class="menu-btn hidden">Play</button>
+      </div>
+
+      <!-- Game over overlay (hidden until the player loses) -->
+      <div id="game-over-screen" class="overlay-screen hidden">
+        <h2 class="game-title small">Game Over!</h2>
+        <p id="final-score" class="final-stat">Score: 0</p>
+        <p id="final-best" class="final-stat">Best: 0</p>
+        <button id="btn-play-again" class="menu-btn">Play Again</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
