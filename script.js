@@ -26,7 +26,7 @@ const GAME_CONFIG = {
     // Jelly beans
     jellyBeanSpeed: 150,        // pixels per second they fall
     jellyBeanDisplayWidth: 40,  // visual width in canvas pixels (height follows each sprite's own aspect ratio)
-    jellyBeanHitboxScale: 0.60, // collision circle is smaller than the visual bean (forgiving)
+    jellyBeanHitboxSafeFraction: 0.72, // collision radius as a fraction of the bean's own half-size (kept inside its art)
 
     // Spawning — see updateSpawning() for how these are used to keep things fair
     spawnIntervalMin: 1300,     // ms between one wave finishing and the next starting (min)
@@ -38,7 +38,7 @@ const GAME_CONFIG = {
     // Player (capybara)
     playerMoveSpeed: 12,          // how quickly the capybara slides to a new lane (higher = snappier)
     capybaraDisplayWidth: 96,     // visual width in canvas pixels (height follows the sprite's aspect ratio)
-    capybaraHitboxScale: 0.34,    // collision circle radius, as a fraction of display width (forgiving)
+    capybaraHitboxSafeFraction: 0.55, // collision radius as a fraction of the capybara's own half-size (kept inside its art)
     jumpAnimationDurationMs: 380, // how long the "jump" sprite shows after a lane change
     jumpBounceHeight: 12,         // purely visual hop height in pixels (does not affect collision)
 
@@ -130,12 +130,29 @@ let groundDisplayHeight = 0;
 let groundTopY = 0;
 let playerY = 0;
 
+// The capybara's collision circle — computed once from the STILL sprite so
+// it stays perfectly consistent even while the jump sprite (a slightly
+// different size) is briefly showing. See computeLayout() for the math.
+let capybaraCollisionCenterY = 0;
+let capybaraCollisionRadius = 0;
+
 
 function computeLayout() {
     groundDisplayHeight = assets.ground.naturalHeight * (CANVAS_WIDTH / assets.ground.naturalWidth);
     groundTopY = CANVAS_HEIGHT - groundDisplayHeight;
     // Stand the capybara on the flat grass, above where the on-screen buttons sit.
     playerY = groundTopY + groundDisplayHeight * 0.56;
+
+    // The capybara sprite is drawn with its TOP edge at (playerY - refH*0.72)
+    // (see drawCapybara), so its true visual center sits a bit above playerY.
+    // Work that out here, then size the collision circle to comfortably fit
+    // inside the sprite's own width/height — never larger than either —
+    // so the hitbox can never poke out past the art in any direction.
+    const refH = GAME_CONFIG.capybaraDisplayWidth *
+        (assets.capybaraStill.naturalHeight / assets.capybaraStill.naturalWidth);
+    capybaraCollisionCenterY = playerY - refH * 0.22;
+    capybaraCollisionRadius =
+        (Math.min(GAME_CONFIG.capybaraDisplayWidth, refH) / 2) * GAME_CONFIG.capybaraHitboxSafeFraction;
 }
 
 
@@ -222,12 +239,17 @@ function randomLane() {
 
 function spawnBean(lane) {
     const img = assets.beans[Math.floor(Math.random() * assets.beans.length)];
+    const w = GAME_CONFIG.jellyBeanDisplayWidth;
+    const h = w * (img.naturalHeight / img.naturalWidth);
     activeBeans.push({
         lane: lane,
         x: LANE_CENTERS[lane],
         y: -GAME_CONFIG.jellyBeanDisplayWidth,
         speed: GAME_CONFIG.jellyBeanSpeed,
         img: img,
+        // Sized to this specific bean's own art, so the hitbox never
+        // reaches past its actual width or height in any direction.
+        radius: (Math.min(w, h) / 2) * GAME_CONFIG.jellyBeanHitboxSafeFraction,
         ageMs: 0,
         isWaveStarter: false,
         companionPending: false,
@@ -291,32 +313,20 @@ function drawJellyBean(bean) {
     const w = GAME_CONFIG.jellyBeanDisplayWidth;
     const h = w * (bean.img.naturalHeight / bean.img.naturalWidth);
 
-    // Soft shadow beneath the bean for a little depth
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.10)';
-    ctx.beginPath();
-    ctx.ellipse(bean.x, bean.y + h * 0.42, w * 0.4, h * 0.14, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
     ctx.drawImage(bean.img, bean.x - w / 2, bean.y - h / 2, w, h);
 }
 
 
 // ----------------------------------------------------------------------------
-// 6. Collision detection (circle-based, with shrunk "forgiving" hitboxes)
+// 6. Collision detection (circle-based, with hitboxes kept inside the art)
 // ----------------------------------------------------------------------------
 function checkCollisions() {
-    const capybaraRadius = GAME_CONFIG.capybaraDisplayWidth * GAME_CONFIG.capybaraHitboxScale;
-
     for (const bean of activeBeans) {
-        const beanRadius = GAME_CONFIG.jellyBeanDisplayWidth * GAME_CONFIG.jellyBeanHitboxScale;
-
         const dx = bean.x - playerX;
-        const dy = bean.y - playerY;
+        const dy = bean.y - capybaraCollisionCenterY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance < capybaraRadius + beanRadius) {
+        if (distance < capybaraCollisionRadius + bean.radius) {
             return true; // collision!
         }
     }
