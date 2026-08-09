@@ -143,11 +143,13 @@ function computeLayout() {
 // 4. Player (capybara) — movement, jump animation, drawing
 // ----------------------------------------------------------------------------
 let playerJumpUntil = 0; // timestamp (ms) until which the "jump" sprite is shown
+let facingDirection = 'right'; // 'right' or 'left' — flips the capybara sprite to match
 
 function movePlayerLeft() {
     if (gameState !== 'playing') return;
     if (playerLane > 0) {
         playerLane -= 1;
+        facingDirection = 'left';
         triggerJumpAnimation();
     }
 }
@@ -156,6 +158,7 @@ function movePlayerRight() {
     if (gameState !== 'playing') return;
     if (playerLane < GAME_CONFIG.laneCount - 1) {
         playerLane += 1;
+        facingDirection = 'right';
         triggerJumpAnimation();
     }
 }
@@ -187,7 +190,19 @@ function drawCapybara(now) {
         bounce = Math.sin(progress * Math.PI) * GAME_CONFIG.jumpBounceHeight;
     }
 
-    ctx.drawImage(img, playerX - w / 2, playerY - h * 0.72 - bounce, w, h);
+    const drawY = playerY - h * 0.72 - bounce;
+
+    // The source art faces right by default, so mirror it horizontally
+    // whenever the capybara is facing left.
+    if (facingDirection === 'left') {
+        ctx.save();
+        ctx.translate(playerX, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, -w / 2, drawY, w, h);
+        ctx.restore();
+    } else {
+        ctx.drawImage(img, playerX - w / 2, drawY, w, h);
+    }
 }
 
 
@@ -430,6 +445,7 @@ function startGame() {
     playerLane = 1;
     playerX = LANE_CENTERS[playerLane];
     playerJumpUntil = 0;
+    facingDirection = 'right';
 
     updateHud();
     startScreen.classList.add('hidden');
