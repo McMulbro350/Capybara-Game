@@ -1,49 +1,60 @@
 // ============================================================================
-// CAPYBARA JELLY DODGE — Level 1 (Easy)
+// CAPYBARA BEAN BOUNCE
 //
 // This file is organized into these sections:
-//   1. GAME_CONFIG        - all tunable numbers live here
-//   2. Asset loading       - loads all images before the game can start
-//   3. Setup & state       - canvas, lanes, game state variables
-//   4. Player (capybara)   - position, movement, jump animation, drawing
-//   5. Jelly beans          - spawning system, movement, drawing
-//   6. Collision detection
-//   7. Score & high score
-//   8. Background drawing (sky gradient, drifting clouds, ground art)
-//   9. Game loop
-//  10. Input handling (buttons, keyboard, touch)
-//  11. Start / game over screens
+//   1. LEVEL_CONFIGS & GAME_CONFIG - all tunable numbers live here
+//   2. Asset loading                - loads the canvas-drawn images
+//   3. Progress (level unlocks)      - saved to localStorage
+//   4. Setup & state                 - canvas, lanes, game state variables
+//   5. Player (capybara)             - position, movement, jump, drawing
+//   6. Jelly beans                    - fair "always something falling" spawner
+//   7. Collision detection
+//   8. Score & high score
+//   9. Background drawing (sky gradient, drifting clouds, ground art)
+//  10. Game loop
+//  11. Input handling (buttons, keyboard, touch)
+//  12. Title screen intro animation
+//  13. Level select screen
+//  14. Level flow (start / win / lose) + screen transitions
 // ============================================================================
 
 
 // ----------------------------------------------------------------------------
-// 1. GAME_CONFIG — change these numbers to tune difficulty.
-//    Later, Level 2 / Level 3 can simply swap in a different config object.
+// 1. LEVEL_CONFIGS & GAME_CONFIG
+//
+//    LEVEL_CONFIGS holds only the numbers that change between levels
+//    (speed, spawn rate, how many beans you need to dodge to win). Add a
+//    "2:" and "3:" entry here later to bring Level 2 / 3 to life — the rest
+//    of the game already reads from whichever level is currently active.
+//
+//    GAME_CONFIG holds everything else (sizes, movement feel, hitboxes)
+//    that stays the same across every level.
 // ----------------------------------------------------------------------------
+const LEVEL_CONFIGS = {
+    1: {
+        label: 'Level 1 — Easy',
+        jellyBeanSpeed: 195,     // pixels per second they fall
+        spawnIntervalMin: 500,   // ms between spawns (min) — keeps the sky lively
+        spawnIntervalMax: 900,   // ms (max)
+        maxActiveBeans: 3,       // never more than this many falling at once
+        winScore: 10             // beans you must dodge to clear the level
+    }
+};
+const TOTAL_LEVELS = 3; // level-select shows this many badges (levels 2 & 3 arrive later)
+
 const GAME_CONFIG = {
     laneCount: 3,
 
-    // Jelly beans
-    jellyBeanSpeed: 150,        // pixels per second they fall
-    jellyBeanDisplayWidth: 40,  // visual width in canvas pixels (height follows each sprite's own aspect ratio)
-    jellyBeanHitboxSafeFraction: 0.72, // collision radius as a fraction of the bean's own half-size (kept inside its art)
-
-    // Spawning — see updateSpawning() for how these are used to keep things fair
-    spawnIntervalMin: 1300,     // ms between one wave finishing and the next starting (min)
-    spawnIntervalMax: 2000,     // ms (max)
-    doubleSpawnChance: 0.3,     // chance a wave gets a 2nd "companion" bean
-    companionDelayMin: 500,     // ms after the first bean of a wave before a companion can appear
-    companionDelayMax: 1000,    // ms
+    // Jelly beans (visual size / hitbox — falling speed lives in LEVEL_CONFIGS)
+    jellyBeanDisplayWidth: 40,
+    jellyBeanHitboxSafeFraction: 0.72, // collision radius as a fraction of the bean's own half-size
 
     // Player (capybara)
     playerMoveSpeed: 12,          // how quickly the capybara slides to a new lane (higher = snappier)
-    capybaraDisplayWidth: 96,     // visual width in canvas pixels (height follows the sprite's aspect ratio)
-    capybaraHitboxSafeFraction: 0.55, // collision radius as a fraction of the capybara's own half-size (kept inside its art)
-    jumpAnimationDurationMs: 380, // how long the "jump" sprite shows after a lane change
-    jumpBounceHeight: 12,         // purely visual hop height in pixels (does not affect collision)
-
-    // Score
-    pointsPerSecond: 10,
+    capybaraDisplayWidth: 96,
+    capybaraHitboxSafeFraction: 0.55, // collision radius as a fraction of the capybara's own half-size
+    jumpAnimationDurationMs: 380,     // how long the "jump" sprite shows after a lane change
+    jumpBounceHeight: 12,             // purely visual hop height in pixels (does not affect collision)
 
     // Clouds — each drifts slowly and loops around when it exits the screen
     clouds: [
@@ -57,6 +68,9 @@ const GAME_CONFIG = {
 
 // ----------------------------------------------------------------------------
 // 2. Asset loading
+//    (Only images drawn ON THE CANVAS need to be preloaded like this — the
+//    title logo, buttons, and level badges are plain HTML <img> tags, so the
+//    browser loads those on its own.)
 // ----------------------------------------------------------------------------
 function loadImage(src) {
     return new Promise((resolve, reject) => {
@@ -93,7 +107,29 @@ async function loadAllAssets() {
 
 
 // ----------------------------------------------------------------------------
-// 3. Setup & state
+// 3. Progress (which levels are unlocked) — saved to localStorage
+// ----------------------------------------------------------------------------
+const PROGRESS_KEY = 'capybaraBeanBounce_progress';
+
+function loadProgress() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY));
+        if (saved && typeof saved.unlockedLevel === 'number') return saved;
+    } catch (e) {
+        // ignore malformed/missing data and fall back to defaults below
+    }
+    return { unlockedLevel: 1 };
+}
+
+function saveProgress() {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+}
+
+let progress = loadProgress();
+
+
+// ----------------------------------------------------------------------------
+// 4. Setup & state
 // ----------------------------------------------------------------------------
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
@@ -108,12 +144,14 @@ for (let i = 0; i < GAME_CONFIG.laneCount; i++) {
     LANE_CENTERS.push(LANE_WIDTH * i + LANE_WIDTH / 2);
 }
 
-// Game state: 'loading' | 'start' | 'playing' | 'gameover'
+// Game state: 'loading' | 'title' | 'levelSelect' | 'playing' | 'levelComplete' | 'gameover'
 let gameState = 'loading';
 
+let currentLevel = 1;
+let currentLevelConfig = LEVEL_CONFIGS[1];
+
 let activeBeans = [];      // jelly beans currently falling
-let spawnTimer = 0;        // counts down (ms) until the next wave may spawn
-let surviveTimeMs = 0;     // how long the current run has lasted
+let spawnTimer = 0;        // counts down (ms) until the next bean may spawn
 let score = 0;
 let bestScore = loadBestScore();
 
@@ -157,7 +195,7 @@ function computeLayout() {
 
 
 // ----------------------------------------------------------------------------
-// 4. Player (capybara) — movement, jump animation, drawing
+// 5. Player (capybara) — movement, jump animation, drawing
 // ----------------------------------------------------------------------------
 let playerJumpUntil = 0; // timestamp (ms) until which the "jump" sprite is shown
 let facingDirection = 'right'; // 'right' or 'left' — flips the capybara sprite to match
@@ -224,19 +262,14 @@ function drawCapybara(now) {
 
 
 // ----------------------------------------------------------------------------
-// 5. Jelly beans — the fair spawning system
+// 6. Jelly beans — a fair, "always something falling" spawner
 //
-//    FAIRNESS RULE: at most 2 jelly beans are ever on screen at once, and a
-//    2nd ("companion") bean is only ever placed in one of the lanes NOT
-//    already used by the 1st bean. That means at most 2 of the 3 lanes are
-//    ever occupied at the same time — there is always at least one lane free
-//    for the player to escape into, so an unavoidable 3-lane wall is
-//    impossible by construction (not just by luck).
+//    FAIRNESS RULE: at most 2 of the 3 lanes are ever occupied by a bean at
+//    the same time. Whenever a new bean is due to spawn, if 2 lanes already
+//    have a bean falling, the new one is placed in one of THOSE 2 lanes —
+//    never a brand new 3rd lane. That means a lane is always free to dodge
+//    into, by construction, no matter how often beans spawn.
 // ----------------------------------------------------------------------------
-function randomLane() {
-    return Math.floor(Math.random() * GAME_CONFIG.laneCount);
-}
-
 function spawnBean(lane) {
     const img = assets.beans[Math.floor(Math.random() * assets.beans.length)];
     const w = GAME_CONFIG.jellyBeanDisplayWidth;
@@ -244,66 +277,45 @@ function spawnBean(lane) {
     activeBeans.push({
         lane: lane,
         x: LANE_CENTERS[lane],
-        y: -GAME_CONFIG.jellyBeanDisplayWidth,
-        speed: GAME_CONFIG.jellyBeanSpeed,
+        y: -h,
+        speed: currentLevelConfig.jellyBeanSpeed,
         img: img,
         // Sized to this specific bean's own art, so the hitbox never
         // reaches past its actual width or height in any direction.
         radius: (Math.min(w, h) / 2) * GAME_CONFIG.jellyBeanHitboxSafeFraction,
-        ageMs: 0,
-        isWaveStarter: false,
-        companionPending: false,
-        companionDelay: 0
+        scored: false // becomes true the moment it passes the capybara (see updateBeans)
     });
 }
 
-function updateSpawning(dt, dtMs) {
-    // Only start a brand-new wave once the screen is completely clear of beans.
-    // This guarantees waves never overlap in a way that could stack up lanes.
-    if (activeBeans.length === 0) {
-        spawnTimer -= dtMs;
-        if (spawnTimer <= 0) {
-            const lane = randomLane();
-            spawnBean(lane);
-            const startedBean = activeBeans[activeBeans.length - 1];
-            startedBean.isWaveStarter = true;
+function updateSpawning(dtMs) {
+    spawnTimer -= dtMs;
 
-            // Decide right away whether this wave will get a companion bean,
-            // and if so, how long to wait before it appears.
-            startedBean.companionPending = Math.random() < GAME_CONFIG.doubleSpawnChance;
-            startedBean.companionDelay =
-                GAME_CONFIG.companionDelayMin +
-                Math.random() * (GAME_CONFIG.companionDelayMax - GAME_CONFIG.companionDelayMin);
+    const occupiedLanes = new Set(activeBeans.map(bean => bean.lane));
+    const screenIsEmpty = activeBeans.length === 0; // never leave the sky completely clear
 
-            // Reset the timer for the wave AFTER this one.
-            spawnTimer =
-                GAME_CONFIG.spawnIntervalMin +
-                Math.random() * (GAME_CONFIG.spawnIntervalMax - GAME_CONFIG.spawnIntervalMin);
+    if ((spawnTimer <= 0 || screenIsEmpty) && activeBeans.length < currentLevelConfig.maxActiveBeans) {
+        const candidateLanes = [];
+        for (let i = 0; i < GAME_CONFIG.laneCount; i++) {
+            if (occupiedLanes.has(i) || occupiedLanes.size < 2) candidateLanes.push(i);
         }
-    }
+        const lane = candidateLanes[Math.floor(Math.random() * candidateLanes.length)];
+        spawnBean(lane);
 
-    // Check whether any wave-starting bean is ready to spawn its companion.
-    for (const bean of activeBeans) {
-        if (bean.isWaveStarter && bean.companionPending) {
-            if (bean.ageMs >= bean.companionDelay) {
-                // Pick a lane that is NOT the wave-starter's lane. With only
-                // one other bean ever active, this leaves the 3rd lane free.
-                const otherLanes = [];
-                for (let i = 0; i < GAME_CONFIG.laneCount; i++) {
-                    if (i !== bean.lane) otherLanes.push(i);
-                }
-                const companionLane = otherLanes[Math.floor(Math.random() * otherLanes.length)];
-                spawnBean(companionLane);
-                bean.companionPending = false; // only one companion per wave
-            }
-        }
+        spawnTimer = currentLevelConfig.spawnIntervalMin +
+            Math.random() * (currentLevelConfig.spawnIntervalMax - currentLevelConfig.spawnIntervalMin);
     }
 }
 
-function updateBeans(dt, dtMs) {
+function updateBeans(dt) {
     for (const bean of activeBeans) {
         bean.y += bean.speed * dt;
-        bean.ageMs += dtMs;
+
+        // The score counts beans that get past you, not survival time —
+        // award the point the instant a bean's center passes your row.
+        if (!bean.scored && bean.y > capybaraCollisionCenterY) {
+            bean.scored = true;
+            score += 1;
+        }
     }
     // Remove beans that have fallen off the bottom of the screen.
     activeBeans = activeBeans.filter(bean => bean.y - GAME_CONFIG.jellyBeanDisplayWidth < CANVAS_HEIGHT);
@@ -312,13 +324,12 @@ function updateBeans(dt, dtMs) {
 function drawJellyBean(bean) {
     const w = GAME_CONFIG.jellyBeanDisplayWidth;
     const h = w * (bean.img.naturalHeight / bean.img.naturalWidth);
-
     ctx.drawImage(bean.img, bean.x - w / 2, bean.y - h / 2, w, h);
 }
 
 
 // ----------------------------------------------------------------------------
-// 6. Collision detection (circle-based, with hitboxes kept inside the art)
+// 7. Collision detection (circle-based, with hitboxes kept inside the art)
 // ----------------------------------------------------------------------------
 function checkCollisions() {
     for (const bean of activeBeans) {
@@ -335,15 +346,18 @@ function checkCollisions() {
 
 
 // ----------------------------------------------------------------------------
-// 7. Score & high score
+// 8. Score & high score
 // ----------------------------------------------------------------------------
 function loadBestScore() {
-    const saved = localStorage.getItem('capybaraJellyDodge_bestScore');
+    const saved = localStorage.getItem('capybaraBeanBounce_bestScore');
     return saved ? parseInt(saved, 10) : 0;
 }
 
-function saveBestScore(value) {
-    localStorage.setItem('capybaraJellyDodge_bestScore', String(value));
+function saveBestScoreIfNeeded() {
+    if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('capybaraBeanBounce_bestScore', String(bestScore));
+    }
 }
 
 function updateHud() {
@@ -353,7 +367,7 @@ function updateHud() {
 
 
 // ----------------------------------------------------------------------------
-// 8. Background drawing (sky gradient, drifting clouds, ground art)
+// 9. Background drawing (sky gradient, drifting clouds, ground art)
 // ----------------------------------------------------------------------------
 function drawSky() {
     // The sky gradient image is just a thin vertical strip of the exact
@@ -388,7 +402,7 @@ function drawBackground(timeMs) {
 
 
 // ----------------------------------------------------------------------------
-// 9. Game loop
+// 10. Game loop
 // ----------------------------------------------------------------------------
 function gameLoop(timestamp) {
     if (lastFrameTime === null) lastFrameTime = timestamp;
@@ -397,30 +411,36 @@ function gameLoop(timestamp) {
     lastFrameTime = timestamp;
 
     if (gameState === 'playing') {
-        updateSpawning(dt, dtMs);
-        updateBeans(dt, dtMs);
+        updateSpawning(dtMs);
+        updateBeans(dt);
         updatePlayer(dt);
-
-        surviveTimeMs += dtMs;
-        score = Math.floor((surviveTimeMs / 1000) * GAME_CONFIG.pointsPerSecond);
         updateHud();
 
         if (checkCollisions()) {
             triggerGameOver();
+        } else if (score >= currentLevelConfig.winScore) {
+            completeLevel();
         }
     }
 
-    // Draw everything (also drawn behind the start/game-over overlays)
+    // The sky/clouds/ground keep drifting behind every screen, including
+    // the title and level-select overlays, for a lively, continuous feel.
     drawBackground(timestamp);
-    for (const bean of activeBeans) drawJellyBean(bean);
-    drawCapybara(timestamp);
+
+    // Only draw the gameplay capybara/beans while actually playing (or on
+    // the game-over screen, so the moment of collision is still visible) —
+    // the title screen has its own separate capybara graphic.
+    if (gameState === 'playing' || gameState === 'gameover') {
+        for (const bean of activeBeans) drawJellyBean(bean);
+        drawCapybara(timestamp);
+    }
 
     requestAnimationFrame(gameLoop);
 }
 
 
 // ----------------------------------------------------------------------------
-// 10. Input handling — keyboard, on-screen buttons, and touch
+// 11. Input handling — keyboard, on-screen buttons, and touch
 // ----------------------------------------------------------------------------
 document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') movePlayerLeft();
@@ -442,15 +462,126 @@ btnRight.addEventListener('pointerdown', (e) => {
 
 
 // ----------------------------------------------------------------------------
-// 11. Start / game over screens
+// 12. Title screen intro animation
+//     Logo drops in and starts wobbling -> capybara drops in and starts
+//     wobbling -> Play button pops in. Each step waits for the previous
+//     one's drop animation to actually finish (via 'animationend') rather
+//     than a guessed delay, so it stays in sync even if timings change.
 // ----------------------------------------------------------------------------
-const startScreen = document.getElementById('start-screen');
-const gameOverScreen = document.getElementById('game-over-screen');
+function runTitleIntro() {
+    const scene = document.getElementById('title-scene');
+    const logo = document.getElementById('title-logo');
+    const capy = document.getElementById('title-capybara');
+    const playBtn = document.getElementById('btn-play');
 
-function startGame() {
+    scene.classList.remove('hidden');
+    logo.classList.add('drop-in');
+
+    logo.addEventListener('animationend', () => {
+        logo.classList.add('wobble');
+
+        setTimeout(() => {
+            capy.classList.add('drop-in');
+
+            capy.addEventListener('animationend', () => {
+                capy.classList.add('wobble');
+
+                setTimeout(() => {
+                    playBtn.classList.remove('hidden');
+                    playBtn.classList.add('pop-in');
+                }, 250);
+            }, { once: true });
+        }, 200);
+    }, { once: true });
+}
+
+
+// ----------------------------------------------------------------------------
+// 13. Level select screen
+// ----------------------------------------------------------------------------
+const levelSelectScreen = document.getElementById('level-select-screen');
+
+function renderLevelSelect() {
+    document.querySelectorAll('.level-btn').forEach(btn => {
+        const level = parseInt(btn.dataset.level, 10);
+        btn.classList.toggle('locked', level > progress.unlockedLevel);
+    });
+}
+
+function showComingSoonToast() {
+    const toast = document.getElementById('coming-soon-toast');
+    toast.classList.remove('hidden');
+    clearTimeout(showComingSoonToast.timer);
+    showComingSoonToast.timer = setTimeout(() => toast.classList.add('hidden'), 1500);
+}
+
+document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const level = parseInt(btn.dataset.level, 10);
+        const unlocked = level <= progress.unlockedLevel;
+
+        if (!unlocked) {
+            btn.classList.remove('shake');
+            requestAnimationFrame(() => btn.classList.add('shake'));
+            return;
+        }
+        if (!LEVEL_CONFIGS[level]) {
+            showComingSoonToast(); // badge is unlocked, but this level isn't built yet
+            return;
+        }
+
+        levelSelectScreen.classList.add('hidden');
+        startGame(level);
+    });
+});
+
+
+// ----------------------------------------------------------------------------
+// 14. Level flow (start / win / lose) + screen transitions
+// ----------------------------------------------------------------------------
+const titleScreen = document.getElementById('title-screen');
+const gameOverScreen = document.getElementById('game-over-screen');
+const levelCompleteScreen = document.getElementById('level-complete-screen');
+const hudEl = document.getElementById('hud');
+const controlsEl = document.getElementById('controls');
+
+// Fades hideEl out, then fades showEl in. Used for the bigger screen swaps
+// (title <-> level select) so the transition feels smooth rather than an
+// abrupt cut.
+function fadeSwap(hideEl, showEl, duration = 500) {
+    hideEl.style.transition = `opacity ${duration}ms ease`;
+    hideEl.style.opacity = '0';
+
+    setTimeout(() => {
+        hideEl.classList.add('hidden');
+        hideEl.style.opacity = '';
+        hideEl.style.transition = '';
+
+        showEl.classList.remove('hidden');
+        showEl.style.opacity = '0';
+        showEl.style.transition = `opacity ${duration}ms ease`;
+        requestAnimationFrame(() => {
+            showEl.style.opacity = '1';
+        });
+        setTimeout(() => {
+            showEl.style.opacity = '';
+            showEl.style.transition = '';
+        }, duration);
+    }, duration);
+}
+
+document.getElementById('btn-play').addEventListener('click', () => {
+    renderLevelSelect();
+    fadeSwap(titleScreen, levelSelectScreen, 600);
+    gameState = 'levelSelect';
+});
+
+function startGame(level) {
+    currentLevel = level;
+    currentLevelConfig = LEVEL_CONFIGS[level];
+
     activeBeans = [];
-    spawnTimer = GAME_CONFIG.spawnIntervalMin;
-    surviveTimeMs = 0;
+    spawnTimer = 0; // spawn the first bean right away
     score = 0;
     playerLane = 1;
     playerX = LANE_CENTERS[playerLane];
@@ -458,39 +589,68 @@ function startGame() {
     facingDirection = 'right';
 
     updateHud();
-    startScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
+    levelCompleteScreen.classList.add('hidden');
+    hudEl.classList.remove('hidden');
+    controlsEl.classList.remove('hidden');
     gameState = 'playing';
 }
 
 function triggerGameOver() {
     gameState = 'gameover';
+    saveBestScoreIfNeeded();
 
-    if (score > bestScore) {
-        bestScore = score;
-        saveBestScore(bestScore);
-    }
+    hudEl.classList.add('hidden');
+    controlsEl.classList.add('hidden');
 
     document.getElementById('final-score').textContent = 'Score: ' + score;
     document.getElementById('final-best').textContent = 'Best: ' + bestScore;
-    updateHud();
     gameOverScreen.classList.remove('hidden');
 }
 
-document.getElementById('btn-play').addEventListener('click', startGame);
-document.getElementById('btn-play-again').addEventListener('click', startGame);
+function completeLevel() {
+    gameState = 'levelComplete';
+    saveBestScoreIfNeeded();
+
+    hudEl.classList.add('hidden');
+    controlsEl.classList.add('hidden');
+
+    // Unlock the next level (if this was the newest one beaten).
+    if (currentLevel === progress.unlockedLevel && progress.unlockedLevel < TOTAL_LEVELS) {
+        progress.unlockedLevel = currentLevel + 1;
+        saveProgress();
+    }
+
+    levelCompleteScreen.classList.remove('hidden');
+
+    setTimeout(() => {
+        levelCompleteScreen.classList.add('hidden');
+        renderLevelSelect();
+        levelSelectScreen.classList.remove('hidden');
+        gameState = 'levelSelect';
+    }, 1600);
+}
+
+document.getElementById('btn-play-again').addEventListener('click', () => startGame(currentLevel));
+
+document.getElementById('btn-to-level-select').addEventListener('click', () => {
+    gameOverScreen.classList.add('hidden');
+    renderLevelSelect();
+    levelSelectScreen.classList.remove('hidden');
+    gameState = 'levelSelect';
+});
 
 
 // ----------------------------------------------------------------------------
-// Boot up: load assets, compute layout, then reveal the Play button and
-// kick off the render loop (which draws the idle scene even before Play).
+// Boot up: load assets, compute layout, then run the title screen intro
+// and kick off the render loop (which draws the drifting background right
+// away, even before Play is pressed).
 // ----------------------------------------------------------------------------
 loadAllAssets().then(() => {
     computeLayout();
-    gameState = 'start';
     document.getElementById('loading-text').classList.add('hidden');
-    document.getElementById('btn-play').classList.remove('hidden');
-    updateHud();
+    gameState = 'title';
+    runTitleIntro();
     requestAnimationFrame(gameLoop);
 }).catch(err => {
     console.error('Failed to load game assets:', err);

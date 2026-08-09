@@ -95,12 +95,11 @@ html, body {
 
 .control-btn {
   flex: 0 0 42%;
-  padding: 22px 10px;
-  font-size: 18px;
-  font-weight: bold;
-  font-family: inherit;
-  color: #5a4632;
-  background: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.5);
   border: 3px solid rgba(255, 255, 255, 0.8);
   border-radius: 22px;
   cursor: pointer;
@@ -111,9 +110,16 @@ html, body {
   transition: transform 0.08s ease, background 0.08s ease;
 }
 
+.control-btn img {
+  width: 46px;
+  height: auto;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
 .control-btn:active {
   transform: scale(0.94);
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.75);
 }
 
 /* ==========================================================
@@ -153,17 +159,153 @@ html, body {
   font-size: 28px;
 }
 
-.capybara-preview {
-  width: 170px;
-  height: auto;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15));
+/* ==========================================================
+   Title screen
+   ========================================================== */
+
+#title-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
-.level-label {
-  margin: 0;
-  font-size: 18px;
+.title-logo {
+  width: 78%;
+  max-width: 300px;
+  height: auto;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.18));
+}
+
+.title-capybara {
+  width: 150px;
+  height: auto;
+  margin-top: -6px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.18));
+}
+
+.icon-btn {
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-btn img {
+  width: 88px;
+  height: auto;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.2));
+}
+
+.icon-btn:active img {
+  transform: scale(0.94);
+}
+
+/* Drops an element in from above, then hands off to a gentle infinite wobble */
+@keyframes dropIn {
+  0%   { transform: translateY(-420px) rotate(0deg); opacity: 0; }
+  55%  { transform: translateY(18px) rotate(0deg);   opacity: 1; }
+  75%  { transform: translateY(-6px) rotate(0deg); }
+  100% { transform: translateY(0) rotate(0deg);      opacity: 1; }
+}
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate(4deg); }
+}
+
+@keyframes popIn {
+  0%   { transform: scale(0.4); opacity: 0; }
+  70%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.drop-in {
+  opacity: 0;
+  animation: dropIn 0.9s cubic-bezier(0.22, 1.4, 0.36, 1) forwards;
+}
+
+.wobble {
+  animation: wobble 2.6s ease-in-out infinite;
+}
+
+.pop-in {
+  animation: popIn 0.45s ease-out forwards;
+}
+
+/* ==========================================================
+   Level select screen
+   ========================================================== */
+
+.select-heading {
+  margin: 0 0 6px;
+  color: #8a5a3b;
+  font-size: 24px;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.6);
+}
+
+#level-buttons {
+  display: flex;
+  gap: 14px;
+}
+
+.level-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
+}
+
+.level-btn img {
+  width: 92px;
+  height: auto;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.18));
+}
+
+.level-btn:active {
+  transform: scale(0.94);
+}
+
+.level-btn.locked img {
+  filter: grayscale(1) brightness(0.9) opacity(0.6);
+}
+
+.level-btn.locked {
+  cursor: not-allowed;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-6px); }
+  75%      { transform: translateX(6px); }
+}
+
+.shake {
+  animation: shake 0.3s ease;
+}
+
+.coming-soon-toast {
+  margin: 4px 0 0;
+  font-size: 14px;
   font-weight: bold;
-  color: #6b4a2f;
+  color: #9a8266;
+}
+
+.text-link-btn {
+  margin-top: 2px;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: bold;
+  font-family: inherit;
+  color: #9a8266;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .loading-text {

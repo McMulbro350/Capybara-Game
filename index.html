@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Capybara Jelly Dodge</title>
+<title>Capybara Bean Bounce</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -11,31 +11,58 @@
   <div id="game-wrapper">
     <div id="game-container">
 
-      <!-- Score / Best HUD -->
-      <div id="hud">
+      <!-- Score / Best HUD (only shown while actually playing a level) -->
+      <div id="hud" class="hidden">
         <span id="score-display">Score: 0</span>
         <span id="best-display">Best: 0</span>
       </div>
 
-      <!-- Main game canvas: everything (background, lanes, capybara, jelly beans) is drawn here -->
+      <!-- Main game canvas: sky, clouds, ground, capybara and jelly beans are all drawn here -->
       <canvas id="game-canvas" width="360" height="720"></canvas>
 
-      <!-- On-screen controls, overlaid near the bottom of the game area -->
-      <div id="controls">
-        <button id="btn-left" class="control-btn" aria-label="Move left">&larr; Left</button>
-        <button id="btn-right" class="control-btn" aria-label="Move right">Right &rarr;</button>
+      <!-- On-screen controls, overlaid near the bottom of the game area (gameplay only) -->
+      <div id="controls" class="hidden">
+        <button id="btn-left" class="control-btn" aria-label="Move left">
+          <img src="assets/arrow_left.png" alt="Left">
+        </button>
+        <button id="btn-right" class="control-btn" aria-label="Move right">
+          <img src="assets/arrow_right.png" alt="Right">
+        </button>
       </div>
 
-      <!-- Start screen overlay -->
-      <div id="start-screen" class="overlay-screen">
-        <h1 class="game-title">Capybara<br>Jelly Dodge</h1>
-
-        <!-- Capybara mascot art -->
-        <img class="capybara-preview" src="assets/capybara_still.png" alt="Capybara" />
-
-        <p class="level-label">Level 1 &mdash; Easy</p>
+      <!-- Title screen: logo drops in, then the capybara, then the Play button -->
+      <div id="title-screen" class="overlay-screen">
         <p id="loading-text" class="loading-text">Loading&hellip;</p>
-        <button id="btn-play" class="menu-btn hidden">Play</button>
+
+        <div id="title-scene" class="hidden">
+          <img id="title-logo" class="title-logo" src="assets/title_logo.png" alt="Capybara Bean Bounce">
+          <img id="title-capybara" class="title-capybara" src="assets/capybara_still.png" alt="Capybara">
+          <button id="btn-play" class="icon-btn hidden" aria-label="Play">
+            <img src="assets/btn_play.png" alt="Play">
+          </button>
+        </div>
+      </div>
+
+      <!-- Level select screen -->
+      <div id="level-select-screen" class="overlay-screen hidden">
+        <h2 class="select-heading">Select a Level</h2>
+        <div id="level-buttons">
+          <button class="level-btn" data-level="1" aria-label="Level 1">
+            <img src="assets/level_1_badge.png" alt="Level 1">
+          </button>
+          <button class="level-btn" data-level="2" aria-label="Level 2">
+            <img src="assets/level_2_badge.png" alt="Level 2">
+          </button>
+          <button class="level-btn" data-level="3" aria-label="Level 3">
+            <img src="assets/level_3_badge.png" alt="Level 3">
+          </button>
+        </div>
+        <p id="coming-soon-toast" class="coming-soon-toast hidden">Coming soon!</p>
+      </div>
+
+      <!-- Brief celebration shown right after finishing a level, before returning to Select -->
+      <div id="level-complete-screen" class="overlay-screen hidden">
+        <h2 class="game-title small">Level Complete!</h2>
       </div>
 
       <!-- Game over overlay (hidden until the player loses) -->
@@ -44,6 +71,7 @@
         <p id="final-score" class="final-stat">Score: 0</p>
         <p id="final-best" class="final-stat">Best: 0</p>
         <button id="btn-play-again" class="menu-btn">Play Again</button>
+        <button id="btn-to-level-select" class="text-link-btn">Level Select</button>
       </div>
 
     </div>
