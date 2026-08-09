@@ -150,11 +150,15 @@ html, body {
   z-index: 10;
 }
 
-/* The title screen has no tint of its own — it shows the actual game scene
-   (sky, clouds, ground) drawn on the canvas behind it, so the player sees
-   Level 1 right away instead of a hazy overlay color. */
+/* The title screen and level-select screen each get their own solid,
+   opaque color (rather than a translucent haze over the game canvas), so
+   the crossfade between them reads as a clean color change. */
 #title-screen {
-  background: transparent;
+  background: #bfe4f5;
+}
+
+#level-select-screen {
+  background: #f5c2c2;
 }
 
 .hidden {
@@ -1013,28 +1017,26 @@ const levelCompleteScreen = document.getElementById('level-complete-screen');
 const hudEl = document.getElementById('hud');
 const controlsEl = document.getElementById('controls');
 
-// Fades hideEl out, then fades showEl in. Used for the bigger screen swaps
-// (title <-> level select) so the transition feels smooth rather than an
-// abrupt cut.
-function fadeSwap(hideEl, showEl, duration = 500) {
+// Crossfades hideEl and showEl at the same time (rather than fully fading
+// one out before fading the other in), so the transition reads as a clean
+// blend directly from one screen's color to the other's.
+function fadeSwap(hideEl, showEl, duration = 600) {
+    showEl.classList.remove('hidden');
+    showEl.style.opacity = '0';
+    showEl.style.transition = `opacity ${duration}ms ease`;
     hideEl.style.transition = `opacity ${duration}ms ease`;
-    hideEl.style.opacity = '0';
+
+    requestAnimationFrame(() => {
+        hideEl.style.opacity = '0';
+        showEl.style.opacity = '1';
+    });
 
     setTimeout(() => {
         hideEl.classList.add('hidden');
         hideEl.style.opacity = '';
         hideEl.style.transition = '';
-
-        showEl.classList.remove('hidden');
-        showEl.style.opacity = '0';
-        showEl.style.transition = `opacity ${duration}ms ease`;
-        requestAnimationFrame(() => {
-            showEl.style.opacity = '1';
-        });
-        setTimeout(() => {
-            showEl.style.opacity = '';
-            showEl.style.transition = '';
-        }, duration);
+        showEl.style.opacity = '';
+        showEl.style.transition = '';
     }, duration);
 }
 
