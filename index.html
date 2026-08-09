@@ -150,6 +150,13 @@ html, body {
   z-index: 10;
 }
 
+/* The title screen has no tint of its own — it shows the actual game scene
+   (sky, clouds, ground) drawn on the canvas behind it, so the player sees
+   Level 1 right away instead of a hazy overlay color. */
+#title-screen {
+  background: transparent;
+}
+
 .hidden {
   display: none;
 }
@@ -210,12 +217,14 @@ html, body {
   transform: scale(0.94);
 }
 
-/* Drops an element in from above, then hands off to a gentle infinite wobble */
-@keyframes dropIn {
-  0%   { transform: translateY(-420px) rotate(0deg); opacity: 0; }
-  55%  { transform: translateY(18px) rotate(0deg);   opacity: 1; }
-  75%  { transform: translateY(-6px) rotate(0deg); }
-  100% { transform: translateY(0) rotate(0deg);      opacity: 1; }
+/* Jumps an element toward the viewer — starting small and "behind" the
+   screen, overshooting slightly as it lands, like it's popping out at you —
+   then (for logo/capybara) hands off to a gentle infinite wobble. */
+@keyframes jumpFromBack {
+  0%   { transform: scale(0.1); opacity: 0; }
+  55%  { transform: scale(1.15); opacity: 1; }
+  75%  { transform: scale(0.92); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes wobble {
@@ -223,23 +232,13 @@ html, body {
   50%      { transform: rotate(4deg); }
 }
 
-@keyframes popIn {
-  0%   { transform: scale(0.4); opacity: 0; }
-  70%  { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-.drop-in {
+.jump-in {
   opacity: 0;
-  animation: dropIn 0.9s cubic-bezier(0.22, 1.4, 0.36, 1) forwards;
+  animation: jumpFromBack 0.6s ease-out forwards;
 }
 
 .wobble {
   animation: wobble 2.6s ease-in-out infinite;
-}
-
-.pop-in {
-  animation: popIn 0.45s ease-out forwards;
 }
 
 /* ==========================================================
@@ -928,10 +927,10 @@ btnRight.addEventListener('pointerdown', (e) => {
 
 // ----------------------------------------------------------------------------
 // 12. Title screen intro animation
-//     Logo drops in and starts wobbling -> capybara drops in and starts
-//     wobbling -> Play button pops in. Each step waits for the previous
-//     one's drop animation to actually finish (via 'animationend') rather
-//     than a guessed delay, so it stays in sync even if timings change.
+//     The logo, capybara, and Play button all jump toward the viewer at the
+//     same time. The logo and capybara then settle into a gentle infinite
+//     wobble once their landing animation actually finishes (via
+//     'animationend'), so it stays in sync even if timings change.
 // ----------------------------------------------------------------------------
 function runTitleIntro() {
     const scene = document.getElementById('title-scene');
@@ -941,32 +940,27 @@ function runTitleIntro() {
 
     scene.classList.remove('hidden');
 
-    logo.classList.remove('hidden');
-    logo.classList.add('drop-in');
+    [logo, capy, playBtn].forEach(el => {
+        el.classList.remove('hidden');
+        el.classList.add('jump-in');
+    });
 
+    // Swap (not stack) the animation classes: .jump-in also sets a static
+    // opacity:0 for its "not yet landed" resting state, so leaving it on
+    // alongside .wobble would make the element pop back to invisible the
+    // moment the wobble animation takes over.
     logo.addEventListener('animationend', () => {
-        // Swap (not stack) the animation classes: .drop-in also sets a
-        // static opacity:0 for its "not yet dropped" resting state, so
-        // leaving it on alongside .wobble would make the element pop back
-        // to invisible the moment the wobble animation takes over.
-        logo.classList.remove('drop-in');
+        logo.classList.remove('jump-in');
         logo.classList.add('wobble');
-
-        setTimeout(() => {
-            capy.classList.remove('hidden');
-            capy.classList.add('drop-in');
-
-            capy.addEventListener('animationend', () => {
-                capy.classList.remove('drop-in');
-                capy.classList.add('wobble');
-
-                setTimeout(() => {
-                    playBtn.classList.remove('hidden');
-                    playBtn.classList.add('pop-in');
-                }, 250);
-            }, { once: true });
-        }, 200);
     }, { once: true });
+
+    capy.addEventListener('animationend', () => {
+        capy.classList.remove('jump-in');
+        capy.classList.add('wobble');
+    }, { once: true });
+
+    // The Play button just holds its landed pose (animation-fill-mode:
+    // forwards already keeps it there) — no continuous wobble needed.
 }
 
 
