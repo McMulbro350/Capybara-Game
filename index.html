@@ -32,15 +32,14 @@ html, body {
   justify-content: center;
 }
 
-/* The game itself is a tall, phone-shaped rectangle.
-   On desktop it gets a comfortable max width; on phones it fills the screen. */
+/* The game itself is a tall, phone-shaped rectangle. Its exact pixel size is
+   set by JS (see resizeGameContainer in script.js) rather than pure CSS,
+   because setting width, height, AND aspect-ratio together here is
+   unreliable: when a parent gives both dimensions definite values (as the
+   flex wrapper below does), the browser ignores aspect-ratio entirely,
+   which can stretch the canvas non-uniformly in short/wide viewports. */
 #game-container {
   position: relative;
-  width: 100%;
-  max-width: 420px;
-  height: 100%;
-  max-height: 900px;
-  aspect-ratio: 360 / 720;
   background: #cfe8f0;
   border-radius: 18px;
   overflow: hidden;
@@ -150,7 +149,7 @@ html, body {
 }
 
 .control-btn img {
-  width: 60px;
+  width: 84px;
   height: auto;
   pointer-events: none;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.3));
@@ -1355,6 +1354,38 @@ document.getElementById('btn-win-level-select').addEventListener('click', () => 
     levelSelectScreen.classList.remove('hidden');
     gameState = 'levelSelect';
 });
+
+
+// ----------------------------------------------------------------------------
+// Container sizing — computed in JS (not pure CSS) so the game area always
+// keeps its exact 360:720 shape, even in a viewport whose own proportions
+// don't match (e.g. a short, wide desktop window). Relying on CSS
+// width/height percentages plus aspect-ratio together is unreliable, since
+// aspect-ratio is ignored once both dimensions are already definite — see
+// the comment above #game-container in style.css for details.
+// ----------------------------------------------------------------------------
+const GAME_ASPECT_RATIO = CANVAS_WIDTH / CANVAS_HEIGHT; // 360/720
+
+function resizeGameContainer() {
+    const wrapper = document.getElementById('game-wrapper');
+    const container = document.getElementById('game-container');
+
+    const maxW = Math.min(wrapper.clientWidth, 420);
+    const maxH = Math.min(wrapper.clientHeight, 900);
+
+    let w = maxW;
+    let h = w / GAME_ASPECT_RATIO;
+    if (h > maxH) {
+        h = maxH;
+        w = h * GAME_ASPECT_RATIO;
+    }
+
+    container.style.width = w + 'px';
+    container.style.height = h + 'px';
+}
+
+window.addEventListener('resize', resizeGameContainer);
+resizeGameContainer();
 
 
 // ----------------------------------------------------------------------------
