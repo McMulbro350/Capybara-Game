@@ -139,28 +139,25 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 3px solid rgba(255, 255, 255, 0.8);
-  border-radius: 22px;
+  padding: 14px; /* keeps a generous tap target even though there's no visible box */
+  background: none;
+  border: none;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  transition: transform 0.08s ease, background 0.08s ease;
+  transition: transform 0.08s ease;
 }
 
 .control-btn img {
-  width: 46px;
+  width: 60px;
   height: auto;
-  opacity: 0.92;
   pointer-events: none;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.3));
 }
 
 .control-btn:active {
-  transform: scale(0.94);
-  background: rgba(255, 255, 255, 0.75);
+  transform: scale(0.85);
 }
 
 /* ==========================================================
@@ -505,6 +502,14 @@ html, body {
         <h2 class="game-title small">Level Complete!</h2>
       </div>
 
+      <!-- Shown instead of the brief Level Complete screen after beating the final level -->
+      <div id="win-screen" class="overlay-screen hidden">
+        <h2 class="game-title">You Win!</h2>
+        <p class="final-stat">You beat all 3 levels!</p>
+        <button id="btn-win-play-again" class="menu-btn">Play Again</button>
+        <button id="btn-win-level-select" class="text-link-btn">Level Select</button>
+      </div>
+
       <!-- Game over overlay (hidden until the player loses) -->
       <div id="game-over-screen" class="overlay-screen hidden">
         <h2 class="game-title small">Game Over!</h2>
@@ -727,7 +732,7 @@ let spawnBudget = 0;       // stop spawning once beansSpawnedThisLevel reaches t
 let score = 0;
 
 const STARTING_LIVES = 3;
-let lives = STARTING_LIVES;              // persists across levels — only resets after a Game Over
+let lives = STARTING_LIVES;              // reset to 3 at the start of every level
 let invincibleUntil = 0;                 // timestamp (ms) until hit-detection is paused after taking a hit
 const INVINCIBILITY_MS = 900;            // brief grace period after getting hit
 
@@ -1226,6 +1231,7 @@ resetBtn.addEventListener('pointerdown', (e) => {
 const titleScreen = document.getElementById('title-screen');
 const gameOverScreen = document.getElementById('game-over-screen');
 const levelCompleteScreen = document.getElementById('level-complete-screen');
+const winScreen = document.getElementById('win-screen');
 const hudEl = document.getElementById('hud');
 const controlsEl = document.getElementById('controls');
 const screenBackdrop = document.getElementById('screen-backdrop');
@@ -1277,13 +1283,13 @@ function startGame(level) {
     playerJumpUntil = 0;
     invincibleUntil = 0;
     facingDirection = 'right';
-    // Note: `lives` is intentionally NOT reset here — it carries over from
-    // level to level. It's only reset after a Game Over (see below).
+    lives = STARTING_LIVES; // every level starts with a fresh set of 3 lives
 
     updateHud();
     updateHeartsDisplay();
     gameOverScreen.classList.add('hidden');
     levelCompleteScreen.classList.add('hidden');
+    winScreen.classList.add('hidden');
     hudEl.classList.remove('hidden');
     controlsEl.classList.remove('hidden');
     screenBackdrop.classList.add('hidden'); // reveal the live canvas
@@ -1298,13 +1304,9 @@ function triggerGameOver() {
 
     document.getElementById('final-score').textContent = 'Score: ' + score;
     gameOverScreen.classList.remove('hidden');
-
-    lives = STARTING_LIVES; // ready for the next attempt (Play Again or a fresh level)
 }
 
 function completeLevel() {
-    gameState = 'levelComplete';
-
     hudEl.classList.add('hidden');
     controlsEl.classList.add('hidden');
 
@@ -1314,6 +1316,15 @@ function completeLevel() {
         saveProgress();
     }
 
+    if (currentLevel === TOTAL_LEVELS) {
+        // Beat the last level — show the win screen instead of the brief
+        // "Level Complete!" flash back to Select.
+        gameState = 'win';
+        winScreen.classList.remove('hidden');
+        return;
+    }
+
+    gameState = 'levelComplete';
     levelCompleteScreen.classList.remove('hidden');
 
     setTimeout(() => {
@@ -1329,6 +1340,16 @@ document.getElementById('btn-play-again').addEventListener('click', () => startG
 
 document.getElementById('btn-to-level-select').addEventListener('click', () => {
     gameOverScreen.classList.add('hidden');
+    screenBackdrop.classList.remove('hidden'); // cover the canvas again before Select shows
+    renderLevelSelect();
+    levelSelectScreen.classList.remove('hidden');
+    gameState = 'levelSelect';
+});
+
+document.getElementById('btn-win-play-again').addEventListener('click', () => startGame(TOTAL_LEVELS));
+
+document.getElementById('btn-win-level-select').addEventListener('click', () => {
+    winScreen.classList.add('hidden');
     screenBackdrop.classList.remove('hidden'); // cover the canvas again before Select shows
     renderLevelSelect();
     levelSelectScreen.classList.remove('hidden');
