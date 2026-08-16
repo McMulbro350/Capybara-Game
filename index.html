@@ -577,6 +577,7 @@ html, body {
         <h2 class="game-title small">Paused</h2>
         <button id="btn-resume" class="menu-btn">Resume</button>
         <button id="btn-pause-level-select" class="text-link-btn">Level Select</button>
+        <button id="btn-pause-title" class="text-link-btn">Title Screen</button>
       </div>
 
     </div>
@@ -1397,6 +1398,13 @@ document.getElementById('btn-pause-level-select').addEventListener('click', () =
     renderLevelSelect();
     levelSelectScreen.classList.remove('hidden');
     gameState = 'levelSelect';
+});
+
+document.getElementById('btn-pause-title').addEventListener('click', () => {
+    pauseScreen.classList.add('hidden');
+    screenBackdrop.classList.remove('hidden'); // cover the canvas again before the title shows
+    titleScreen.classList.remove('hidden');
+    gameState = 'title';
 });
 
 function triggerGameOver() {
